@@ -8,6 +8,7 @@ import base64
 import io
 
 def initialize_h2ovl_model(model_path):
+    device = 'cuda' # TODO: check if CPU can be used
     config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
 
     # Disable flash attention if it's not supported by the GPU
@@ -19,23 +20,28 @@ def initialize_h2ovl_model(model_path):
         config=config,
         low_cpu_mem_usage=True,
         trust_remote_code=True
-    ).eval().cuda()
+    ).eval().to(device)
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, use_fast=False)
-
     return model, tokenizer
 
 def classify_document(model, tokenizer, image_data):
     prompt = "<image>\nExtract the type of the image, categorizing it as 'invoice', 'resume', or 'news-article'. Type:"
 
-    image = Image.open(io.BytesIO(base64.b64decode(image_data)))
+    try:
+        image = Image.open(io.BytesIO(base64.b64decode(image_data)))
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return "error-load" # TODO: add error handling
 
-    response, history = model.chat(tokenizer, image, prompt, generation_config=None, history=None, return_history=True)
+    try:
+        response, history = model.chat(tokenizer, image, prompt, generation_config=None, history=None, return_history=True)
+    except Exception as e:
+        print(f"Error during model chat: {e}")
+        return "error-chat" # TODO: add error handling
+
     parsed_response = parse_json_response(response)
-    if parsed_response and "type" in parsed_response:
-        return parsed_response["type"]
-    else:
-        return "other"  # Default fallback
+    return parsed_response.get("type", "error-parsing") # TODO: add error handling
 
 def parse_json_response(response):
     try:
@@ -47,10 +53,10 @@ def parse_json_response(response):
             return {"type": response.strip()}
         else:
             print(f"Could not find valid JSON in response: {response}")
-            return {"type": 'other'}
+            return {"type": 'error-parsing'} # TODO: add error handling
     except json.JSONDecodeError:
         print(f"Error decoding JSON from response: {response}")
-        return None
+        return {"type": 'error-parsing'} # TODO: add error handling
 
 # Initialize the model and tokenizer globally for reuse
 model, tokenizer = initialize_h2ovl_model('h2oai/h2ovl-mississippi-800m')
