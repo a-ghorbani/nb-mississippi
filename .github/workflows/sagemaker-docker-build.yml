@@ -5,8 +5,8 @@ on:
     branches:
       - main 
     paths:
-      - 'Dockerfile' 
-      - 'inference.py'
+      - 'aws/Dockerfile' 
+      - 'aws/inference.py'
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,7 @@ jobs:
 
       - name: Build Docker image
         run: |
+          cd aws
           docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest .
 
       - name: Push Docker image to GitHub Container Registry
